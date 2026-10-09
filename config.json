@@ -9,10 +9,12 @@
   "photo_dir": "photos",
   "order": "name",
   "max_photos": 50,
-  "hero_photo": "",
+  "hero_photo": "STV_6647-2.jpg",
+  "exclude": ["PINTOO客製化.jpg"],
 
   "music": "music/bgm.mp3",
   "fit_to_music": true,
+  "max_photo_seconds": 6.5,
   "photo_seconds": 4.5,
   "crossfade": 1.2,
   "intro_seconds": 8,

@@ -242,7 +242,8 @@ def render_clip(clip, t, w, h):
 
 def collect_photos(cfg):
     folder = ROOT / cfg.get("photo_dir", "photos")
-    files = [p for p in folder.rglob("*") if p.suffix.lower() in PHOTO_EXT and not p.name.startswith(".")]
+    files = [p for p in folder.rglob("*") if p.suffix.lower() in PHOTO_EXT and not p.name.startswith(".")
+             and p.name not in cfg.get("exclude", [])]
     if cfg.get("order", "name") == "exif":
         def key(p):
             try:
@@ -288,7 +289,8 @@ def build_timeline(cfg, photos, music_len):
         fixed = intro["dur"] + outro["dur"] + n_ch * ch_dur
         n_clips = 2 + n_ch + len(photos)
         per = (music_len - fixed + (n_clips - 1) * x) / len(photos)
-        per = max(x + 1.5, per)
+        # 相片少、音樂長時不硬撐：每張最多 max_photo_seconds 秒，音樂於片尾淡出截斷
+        per = min(cfg.get("max_photo_seconds", 6.5), max(x + 1.5, per))
 
     rnd = random.Random(cfg.get("seed", 2026))
     clips = [intro]
@@ -386,7 +388,8 @@ def main():
     n_photo = sum(c["type"] == "photo" for c in clips)
     per = next((c["dur"] for c in clips if c["type"] == "photo"), 0)
     print(f"相片 {n_photo} 張，每張 {per:.2f} 秒，影片總長 {total // 60:.0f}:{total % 60:04.1f}"
-          + (f"（配合音樂 {music_len:.1f} 秒）" if music_len else ""))
+          + (f"（音樂 {music_len:.1f} 秒" + ("，片尾淡出截斷）" if music_len > total + 0.5 else "）")
+             if music_len else ""))
     if not photos:
         print("⚠ photos/ 內沒有相片，只會輸出片頭與片尾")
 
