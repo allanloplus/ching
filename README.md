@@ -28,6 +28,8 @@ python3 make_video.py                # 正式版 output/wedding_opening.mp4
 
 | 欄位 | 說明 |
 |---|---|
+| `theme` | `"starry"` 星空預告片風（深藍星空、淡藍光暈字、文字由模糊淡入）／`"gold"` 深色金色光點 |
+| `photo_sparkles` | 相片上疊加緩緩飄落的光屑 |
 | `date_text` | 片頭日期，例如 `"2026.11.21"`，空白則不顯示 |
 | `max_photos` | 相片上限（預設 40，超過會平均抽樣）；開場片建議 30–50 張、2–4 分鐘 |
 | `order` | `"name"` 依檔名、`"exif"` 依拍攝時間 |
@@ -35,7 +37,8 @@ python3 make_video.py                # 正式版 output/wedding_opening.mp4
 | `music` / `fit_to_music` | 配樂路徑；`true` 時依音樂長度自動調整每張秒數 |
 | `photo_seconds` | 沒有音樂時每張相片秒數 |
 | `captions` | `{"IMG_0012.jpg": "第一次約會・2019"}` |
-| `chapters` | `[{"before": "IMG_0030.jpg", "title": "求婚", "subtitle": "2025.02.14"}]` |
+| `chapters` | 故事字卡，插在指定相片之前：`{"before": "IMG_0030.jpg", "lines": ["開始期待", "和你一起走到最後"]}`；`"before": "__outro__"` 表示放在片尾前；也可用 `title`/`subtitle` |
+| `exclude` / `max_photo_seconds` | 排除的相片檔名／每張相片秒數上限（音樂較長時於片尾淡出截斷） |
 | `font_regular` / `font_bold` | 自訂字型路徑（Windows 可指定 `C:/Windows/Fonts/...`） |
 
 ## 現場播放建議

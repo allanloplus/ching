@@ -41,7 +41,18 @@ FONT_CANDIDATES = {
     ],
 }
 
+THEMES = {
+    # 金色光點：深色底、金色點綴
+    "gold": {"accent": GOLD, "text": CREAM, "glow": None},
+    # 星空預告片：深藍星空、淡藍發光文字，文字由模糊淡入
+    "starry": {"accent": (178, 202, 255), "text": (228, 237, 255), "glow": (110, 150, 255)},
+}
+
 CFG = {}  # 由 main() 載入，worker 透過 initializer 取得
+
+
+def theme():
+    return THEMES.get(CFG.get("theme", "gold"), THEMES["gold"])
 
 
 # ---------------------------------------------------------------- 工具函式
@@ -67,8 +78,9 @@ def font(kind, size):
     sys.exit("找不到中文字型，請在 config.json 設定 font_regular / font_bold")
 
 
-def text_layer(text, size, kind="regular", color=CREAM, spacing=0.0, shadow=True):
-    """回傳一張已排版好的 RGBA 文字圖層 (含柔和陰影)。spacing 為字距 (字級倍數)。"""
+@lru_cache(maxsize=128)
+def text_layer(text, size, kind="regular", color=CREAM, spacing=0.0, shadow=True, glow=None):
+    """回傳一張已排版好的 RGBA 文字圖層 (含柔和陰影或光暈)。spacing 為字距 (字級倍數)。"""
     f = font(kind, size)
     gap = int(size * spacing)
     widths = [f.getbbox(ch)[2] if ch.strip() else size // 3 for ch in text]
@@ -89,13 +101,20 @@ def text_layer(text, size, kind="regular", color=CREAM, spacing=0.0, shadow=True
         draw_on(sh, (0, 0, 0, 170))
         sh = sh.filter(ImageFilter.GaussianBlur(max(2, size // 12)))
         layer.alpha_composite(sh, (0, max(1, size // 30)))
+    if glow:
+        gl = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+        draw_on(gl, tuple(glow) + (230,))
+        layer.alpha_composite(gl.filter(ImageFilter.GaussianBlur(max(3, size // 5))))
+        layer.alpha_composite(gl.filter(ImageFilter.GaussianBlur(max(2, size // 14))))
     draw_on(layer, color + (255,))
     return layer
 
 
-def paste_center(base, layer, cx, cy, opacity=1.0):
+def paste_center(base, layer, cx, cy, opacity=1.0, blur=0.0):
     if opacity <= 0:
         return
+    if blur > 0.5:
+        layer = layer.filter(ImageFilter.GaussianBlur(blur))
     if opacity < 1:
         layer = layer.copy()
         a = layer.getchannel("A").point(lambda v: int(v * opacity))
@@ -150,10 +169,78 @@ def bokeh(w, h, t, seed=7, count=46):
     return layer.resize((w, h), Image.BILINEAR)
 
 
+@lru_cache(maxsize=2)
+def starry_backdrop(w, h):
+    """深藍漸層 + 淡淡星雲 + 細小靜態星點。"""
+    top, bottom = (6, 12, 34), (28, 42, 84)
+    grad = Image.linear_gradient("L").resize((w, h))
+    bg = Image.composite(Image.new("RGB", (w, h), bottom), Image.new("RGB", (w, h), top), grad)
+    rnd = random.Random(11)
+    sw, sh = max(1, w // 8), max(1, h // 8)
+    neb = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
+    d = ImageDraw.Draw(neb)
+    for _ in range(14):
+        x, y, r = rnd.random() * sw, rnd.random() * sh, rnd.uniform(0.12, 0.35) * sw
+        c = rnd.choice([(70, 90, 170), (95, 80, 160), (60, 120, 180)])
+        d.ellipse((x - r, y - r * 0.6, x + r, y + r * 0.6), fill=c + (rnd.randint(25, 55),))
+    neb = neb.filter(ImageFilter.GaussianBlur(sw / 12)).resize((w, h), Image.BICUBIC)
+    bg = bg.convert("RGBA")
+    bg.alpha_composite(neb)
+    d = ImageDraw.Draw(bg)
+    for _ in range(int(w * h / 2600)):
+        x, y = rnd.random() * w, rnd.random() * h
+        a = rnd.randint(40, 170)
+        d.point((x, y), fill=(220, 230, 255, a))
+    vig = Image.radial_gradient("L").resize((w, h)).point(lambda v: int(v * 0.55))
+    return Image.composite(Image.new("RGB", (w, h), (0, 0, 0)), bg.convert("RGB"), vig)
+
+
+def twinkle(w, h, t, seed=3, count=70):
+    """會閃爍的亮星，部分帶十字光芒，並有少量緩緩飄落的光屑。"""
+    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    rnd = random.Random(seed)
+    s = h / 1080
+    for i in range(count):
+        x, y = rnd.random() * w, rnd.random() * h
+        ph, sp = rnd.random() * math.tau, rnd.uniform(0.8, 2.2)
+        k = 0.5 + 0.5 * math.sin(t * sp + ph)
+        r = rnd.uniform(1.0, 2.6) * s
+        a = int(255 * (0.25 + 0.75 * k))
+        d.ellipse((x - r, y - r, x + r, y + r), fill=(235, 242, 255, a))
+        if i % 9 == 0:
+            L = r * (5 + 6 * k)
+            d.line((x - L, y, x + L, y), fill=(200, 220, 255, a // 2), width=max(1, int(s)))
+            d.line((x, y - L, x, y + L), fill=(200, 220, 255, a // 2), width=max(1, int(s)))
+    layer = layer.filter(ImageFilter.GaussianBlur(0.6 * s))
+    layer.alpha_composite(sparkles(w, h, t, seed + 1, 26))
+    return layer
+
+
+def sparkles(w, h, t, seed=5, count=30):
+    """緩緩飄落、帶光暈的白色光屑（1/3 解析度繪製後放大）。"""
+    sw, sh = w // 3, h // 3
+    layer = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    rnd = random.Random(seed)
+    for _ in range(count):
+        x0, y0 = rnd.random() * sw, rnd.random() * sh
+        r = rnd.uniform(0.8, 2.6) * sw / 640
+        sp = rnd.uniform(6, 16) * sh / 360
+        ph = rnd.random() * math.tau
+        x = (x0 + math.sin(t * 0.6 + ph) * 10 * sw / 640) % sw
+        y = (y0 + t * sp) % sh
+        a = int(rnd.uniform(90, 200) * (0.6 + 0.4 * math.sin(t * 2 + ph)))
+        d.ellipse((x - r * 2.2, y - r * 2.2, x + r * 2.2, y + r * 2.2), fill=(200, 215, 255, a // 4))
+        d.ellipse((x - r, y - r, x + r, y + r), fill=(255, 255, 255, a))
+    return layer.filter(ImageFilter.GaussianBlur(0.5)).resize((w, h), Image.BILINEAR)
+
+
 def divider(w, size, opacity):
     layer = Image.new("RGBA", (w, size * 3), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
     cy, half = size * 1.5, w / 2
+    GOLD = theme()["accent"]
     d.line((0, cy, half - size * 1.2, cy), fill=GOLD + (int(220 * opacity),), width=max(1, size // 8))
     d.line((half + size * 1.2, cy, w, cy), fill=GOLD + (int(220 * opacity),), width=max(1, size // 8))
     r = size * 0.45
@@ -165,22 +252,29 @@ def divider(w, size, opacity):
 
 def render_card(clip, t, w, h):
     """片頭 / 章節 / 片尾的文字卡。lines 由上而下，每行依序淡入並微微上浮。"""
-    base = dark_backdrop(w, h, CFG.get("_hero")).convert("RGBA")
-    base.alpha_composite(bokeh(w, h, t + clip.get("seed", 0)))
+    th = theme()
+    starry = CFG.get("theme") == "starry"
+    if starry:
+        base = starry_backdrop(w, h).convert("RGBA")
+        base.alpha_composite(twinkle(w, h, t + clip.get("seed", 0), seed=3 + clip.get("seed", 0) % 7))
+    else:
+        base = dark_backdrop(w, h, CFG.get("_hero")).convert("RGBA")
+        base.alpha_composite(bokeh(w, h, t + clip.get("seed", 0)))
     s = h / 1080
     lines = clip["lines"]
     heights = [ln["size"] * s * ln.get("lh", 1.6) for ln in lines]
     y = h / 2 - sum(heights) / 2
     for i, (ln, lh) in enumerate(zip(lines, heights)):
-        start = 0.6 + i * 0.55
-        p = smooth((t - start) / 1.4)
-        cy = y + lh / 2 + (1 - p) * 18 * s
+        start = 0.6 + i * (0.8 if starry else 0.55)
+        p = smooth((t - start) / (1.8 if starry else 1.4))
+        cy = y + lh / 2 + (1 - p) * (6 if starry else 18) * s
         if ln.get("divider"):
             paste_center(base, divider(int(w * 0.32), int(14 * s), p), w / 2, cy)
         else:
+            color = th["accent"] if ln.get("accent") else th["text"]
             layer = text_layer(ln["text"], int(ln["size"] * s), ln.get("weight", "regular"),
-                               tuple(ln.get("color", CREAM)), ln.get("spacing", 0.1))
-            paste_center(base, layer, w / 2, cy, p)
+                               tuple(color), ln.get("spacing", 0.1), not starry, th["glow"])
+            paste_center(base, layer, w / 2, cy, p, (1 - p) * ln["size"] * s * 0.18 if starry else 0)
         y += lh
     return base.convert("RGB")
 
@@ -220,6 +314,10 @@ def render_photo(clip, t, w, h):
     cx = cw / 2 + (ax + (bx - ax) * p) * (cw - bw) / 2
     cy = ch / 2 + (ay + (by - ay) * p) * (ch - bh) / 2
     frame = canvas.resize((w, h), Image.BICUBIC, box=(cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2))
+    if CFG.get("photo_sparkles"):
+        frame = frame.convert("RGBA")
+        frame.alpha_composite(sparkles(w, h, t + clip["start"], seed=int(clip["start"]) % 97, count=18))
+        frame = frame.convert("RGB")
     cap = clip.get("caption")
     if cap:
         s = h / 1080
@@ -229,7 +327,7 @@ def render_photo(clip, t, w, h):
         shade = Image.new("RGBA", grad.size, (0, 0, 0, 0))
         shade.putalpha(grad)
         frame.alpha_composite(shade, (0, h - grad.height))
-        paste_center(frame, text_layer(cap, int(46 * s), "regular", CREAM, 0.12), w / 2, h - 110 * s, o)
+        paste_center(frame, text_layer(cap, int(46 * s), "regular", theme()["text"], 0.12), w / 2, h - 110 * s, o)
         frame = frame.convert("RGB")
     return frame
 
@@ -265,7 +363,7 @@ def build_timeline(cfg, photos, music_len):
     g, b = cfg["groom"], cfg["bride"]
     x = cfg.get("crossfade", 1.2)
     intro = {"type": "card", "dur": cfg.get("intro_seconds", 8), "seed": 0, "lines": [
-        {"text": cfg.get("intro_top", "WELCOME TO OUR WEDDING"), "size": 34, "color": GOLD, "spacing": 0.35},
+        {"text": cfg.get("intro_top", "WELCOME TO OUR WEDDING"), "size": 34, "accent": True, "spacing": 0.35},
         {"divider": True, "size": 30},
         {"text": f"{g}  &  {b}", "size": 112, "weight": "bold", "spacing": 0.12, "lh": 1.5},
         {"text": cfg.get("date_text", ""), "size": 40, "spacing": 0.25},
@@ -273,7 +371,7 @@ def build_timeline(cfg, photos, music_len):
     outro = {"type": "card", "dur": cfg.get("outro_seconds", 9), "seed": 50, "lines": [
         {"text": cfg.get("outro_title", "感謝大家今天來參加我們的婚禮"), "size": 84, "weight": "bold", "spacing": 0.2},
         {"divider": True, "size": 30},
-        {"text": f"{g}  &  {b}", "size": 52, "color": GOLD, "spacing": 0.15},
+        {"text": f"{g}  &  {b}", "size": 52, "accent": True, "spacing": 0.15},
         {"text": cfg.get("outro_sub", "祝大家用餐愉快"), "size": 40, "spacing": 0.2},
     ]}
     for c in (intro, outro):
@@ -281,8 +379,20 @@ def build_timeline(cfg, photos, music_len):
 
     chapters = {c["before"]: c for c in cfg.get("chapters", [])}
     captions = cfg.get("captions", {})
-    n_ch = sum(1 for p in photos if p.name in chapters)
+    n_ch = sum(1 for p in photos if p.name in chapters) + ("__outro__" in chapters)
     ch_dur = cfg.get("chapter_seconds", 4.5)
+
+    def chapter_card(c, seed):
+        """章節字卡：可用 title/subtitle，或 lines 逐行（預告片式故事旁白）。"""
+        if c.get("lines"):
+            lines = [{"text": t, "size": c.get("size", 82), "spacing": 0.14, "lh": 1.75} for t in c["lines"]]
+        else:
+            lines = [ln for ln in [
+                {"text": c.get("title", ""), "size": 88, "weight": "bold", "spacing": 0.3},
+                {"divider": True, "size": 26},
+                {"text": c.get("subtitle", ""), "size": 40, "accent": True, "spacing": 0.2},
+            ] if ln.get("divider") or ln["text"]]
+        return {"type": "card", "dur": c.get("seconds", ch_dur), "seed": seed, "lines": lines}
 
     per = cfg.get("photo_seconds", 4.5)
     if music_len and cfg.get("fit_to_music", True) and photos:
@@ -296,19 +406,15 @@ def build_timeline(cfg, photos, music_len):
     clips = [intro]
     for i, p in enumerate(photos):
         if p.name in chapters:
-            c = chapters[p.name]
-            clips.append({"type": "card", "dur": ch_dur, "seed": 100 + i, "lines": [
-                {"text": c.get("title", ""), "size": 88, "weight": "bold", "spacing": 0.3},
-                {"divider": True, "size": 26},
-                {"text": c.get("subtitle", ""), "size": 40, "color": GOLD, "spacing": 0.2},
-            ]})
-            clips[-1]["lines"] = [ln for ln in clips[-1]["lines"] if ln.get("divider") or ln["text"]]
+            clips.append(chapter_card(chapters[p.name], 100 + i))
         zin = rnd.random() < 0.5
         z = (1.0, 1.1) if zin else (1.1, 1.0)
         a = (rnd.uniform(-0.6, 0.6), rnd.uniform(-0.5, 0.5))
         b_ = (rnd.uniform(-0.6, 0.6), rnd.uniform(-0.5, 0.5))
         clips.append({"type": "photo", "path": str(p), "dur": per, "kb": (z[0], z[1], a, b_),
                       "caption": captions.get(p.name, "")})
+    if "__outro__" in chapters:
+        clips.append(chapter_card(chapters["__outro__"], 999))
     clips.append(outro)
 
     t = 0.0
@@ -344,6 +450,7 @@ _W = {}
 
 
 def _init(cfg, clips, x, w, h):
+    cfg = dict(cfg)  # 主程序呼叫時 cfg 可能就是 CFG 本身，先複製再清空
     CFG.clear()
     CFG.update(cfg)
     _W.update(clips=clips, x=x, w=w, h=h)

@@ -5,26 +5,65 @@
   "intro_top": "WELCOME TO OUR WEDDING",
   "outro_title": "感謝大家今天來參加我們的婚禮",
   "outro_sub": "祝大家用餐愉快",
-
+  "theme": "starry",
+  "photo_sparkles": true,
   "photo_dir": "photos",
   "order": "name",
   "max_photos": 50,
   "hero_photo": "STV_6647-2.jpg",
-  "exclude": ["PINTOO客製化.jpg"],
-
+  "exclude": [
+    "PINTOO客製化.jpg"
+  ],
   "music": "music/bgm.mp3",
   "fit_to_music": true,
-  "max_photo_seconds": 6.5,
+  "max_photo_seconds": 5.0,
   "photo_seconds": 4.5,
   "crossfade": 1.2,
   "intro_seconds": 8,
   "outro_seconds": 9,
   "chapter_seconds": 4.5,
-
   "captions": {},
-  "chapters": [],
-
-  "resolution": [1920, 1080],
+  "chapters": [
+    {
+      "before": "STV_6619-2.jpg",
+      "lines": [
+        "當第一次相遇",
+        "世界就悄悄換了顏色"
+      ]
+    },
+    {
+      "before": "STV_6758-2.jpg",
+      "lines": [
+        "從悄悄心動",
+        "到深深信任"
+      ]
+    },
+    {
+      "before": "STV_6806.jpg",
+      "lines": [
+        "在每個平凡的日子裡",
+        "你總能讓我笑"
+      ]
+    },
+    {
+      "before": "STV_6857-2.jpg",
+      "lines": [
+        "開始期待",
+        "和你一起走到最後"
+      ]
+    },
+    {
+      "before": "__outro__",
+      "lines": [
+        "這一刻",
+        "我們把彼此交給對方"
+      ]
+    }
+  ],
+  "resolution": [
+    1920,
+    1080
+  ],
   "fps": 30,
   "output": "wedding_opening.mp4",
   "seed": 2026
