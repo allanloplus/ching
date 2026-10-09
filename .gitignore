@@ -1,0 +1,7 @@
+# 個人相片與音樂屬個人資料 / 著作權素材，不進版控
+photos/*
+!photos/.gitkeep
+music/*
+!music/.gitkeep
+output/
+__pycache__/

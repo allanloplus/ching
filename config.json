@@ -1,0 +1,29 @@
+{
+  "groom": "李政宏",
+  "bride": "羅奕晴",
+  "date_text": "",
+  "intro_top": "WELCOME TO OUR WEDDING",
+  "outro_title": "感謝您的蒞臨",
+  "outro_sub": "婚宴即將開始，敬請入座",
+
+  "photo_dir": "photos",
+  "order": "name",
+  "max_photos": 40,
+  "hero_photo": "",
+
+  "music": "",
+  "fit_to_music": true,
+  "photo_seconds": 4.5,
+  "crossfade": 1.2,
+  "intro_seconds": 8,
+  "outro_seconds": 9,
+  "chapter_seconds": 4.5,
+
+  "captions": {},
+  "chapters": [],
+
+  "resolution": [1920, 1080],
+  "fps": 30,
+  "output": "wedding_opening.mp4",
+  "seed": 2026
+}
