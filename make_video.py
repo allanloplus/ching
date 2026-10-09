@@ -270,10 +270,10 @@ def build_timeline(cfg, photos, music_len):
         {"text": cfg.get("date_text", ""), "size": 40, "spacing": 0.25},
     ]}
     outro = {"type": "card", "dur": cfg.get("outro_seconds", 9), "seed": 50, "lines": [
-        {"text": cfg.get("outro_title", "感謝您的蒞臨"), "size": 84, "weight": "bold", "spacing": 0.2},
+        {"text": cfg.get("outro_title", "感謝大家今天來參加我們的婚禮"), "size": 84, "weight": "bold", "spacing": 0.2},
         {"divider": True, "size": 30},
         {"text": f"{g}  &  {b}", "size": 52, "color": GOLD, "spacing": 0.15},
-        {"text": cfg.get("outro_sub", "婚宴即將開始，敬請入座"), "size": 40, "spacing": 0.2},
+        {"text": cfg.get("outro_sub", "祝大家用餐愉快"), "size": 40, "spacing": 0.2},
     ]}
     for c in (intro, outro):
         c["lines"] = [ln for ln in c["lines"] if ln.get("divider") or ln["text"]]
